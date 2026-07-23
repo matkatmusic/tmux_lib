@@ -25,6 +25,7 @@ from tmux_lib import (
 from tmux_lib import (
     tmux_cancelAndSend,
     tmux_capturePane,
+    tmux_inputBoxHoldsText,
     tmux_killSession,
     tmux_newSession,
     tmux_sendAndSubmit,
@@ -384,6 +385,8 @@ def test_tmux_sendAndSubmit_calls_sendKeys_then_sendEnter_with_same_target(monke
                         lambda p: calls.append(("sendEnter", p)) or 0)
     # Setup: stub sleep to avoid real delay.
     monkeypatch.setattr("time.sleep", lambda s: None)
+    # Setup: input box reads empty so no Enter retry fires.
+    monkeypatch.setattr("tmux_lib.tmux_inputBoxHoldsText", lambda p: False)
     # Test action.
     tmux_sendAndSubmit("sess:0.1", "hello")
     # Test verification: order and shared pane_target.
@@ -395,6 +398,7 @@ def test_tmux_sendAndSubmit_returns_zero_when_both_sends_succeed(monkeypatch):
     monkeypatch.setattr("tmux_lib.tmux_sendKeys", lambda p, t: 0)
     monkeypatch.setattr("tmux_lib.tmux_sendEnter", lambda p: 0)
     monkeypatch.setattr("time.sleep", lambda s: None)
+    monkeypatch.setattr("tmux_lib.tmux_inputBoxHoldsText", lambda p: False)
     # Test action + verification: rc 0 on full success.
     assert tmux_sendAndSubmit("p", "x") == 0
 
@@ -422,6 +426,7 @@ def test_tmux_sendAndSubmit_returns_sendEnter_rc_when_only_sendEnter_fails(monke
     # Setup: sendEnter returns failure rc 3.
     monkeypatch.setattr("tmux_lib.tmux_sendEnter", lambda p: 3)
     monkeypatch.setattr("time.sleep", lambda s: None)
+    monkeypatch.setattr("tmux_lib.tmux_inputBoxHoldsText", lambda p: False)
     # Test action + verification: rc equals sendEnter's rc.
     assert tmux_sendAndSubmit("p", "x") == 3
 
@@ -435,10 +440,44 @@ def test_tmux_sendAndSubmit_sleeps_between_sendKeys_and_sendEnter(monkeypatch):
                         lambda p: events.append("sendEnter") or 0)
     monkeypatch.setattr("time.sleep",
                         lambda s: events.append(("sleep", s)))
+    # Setup: input box reads empty so the retry loop exits after its first check.
+    monkeypatch.setattr("tmux_lib.tmux_inputBoxHoldsText", lambda p: False)
     # Test action.
     tmux_sendAndSubmit("p", "x")
-    # Test verification: sleep occurred strictly between the two sends with 0.5s duration.
-    assert events == ["sendKeys", ("sleep", 0.5), "sendEnter"]
+    # Test verification: sleep occurred strictly between the two sends with 0.5s duration; the trailing 1.0s sleep belongs to the swallowed-Enter check.
+    assert events == ["sendKeys", ("sleep", 0.5), "sendEnter", ("sleep", 1.0)]
+
+
+def test_tmux_inputBoxHoldsText_true_when_prompt_line_has_content(monkeypatch):
+    # Scenario: pane shows the ❯ input line still holding pasted text.
+    monkeypatch.setattr("tmux_lib.tmux_capturePane",
+                        lambda p, s=None: "some output\n❯ Write a file called parser.py\n───\n")
+    assert tmux_inputBoxHoldsText("p") is True
+
+
+def test_tmux_inputBoxHoldsText_false_when_prompt_line_empty(monkeypatch):
+    # Scenario: pane shows an empty ❯ input line (prompt submitted).
+    monkeypatch.setattr("tmux_lib.tmux_capturePane",
+                        lambda p, s=None: "✳ Percolating…\n❯ \n───\n")
+    assert tmux_inputBoxHoldsText("p") is False
+
+
+def test_tmux_sendAndSubmit_resends_enter_while_input_box_holds_text(monkeypatch):
+    # Scenario: first Enter is swallowed by the TUI paste-coalescing; box reads non-empty twice, then clears.
+    enter_calls = []
+    monkeypatch.setattr("tmux_lib.tmux_sendKeys", lambda p, t: 0)
+    monkeypatch.setattr("tmux_lib.tmux_sendEnter",
+                        lambda p: enter_calls.append(p) or 0)
+    monkeypatch.setattr("time.sleep", lambda s: None)
+    # Setup: box holds text on the first two checks, empty afterwards.
+    holds = iter([True, True, False])
+    monkeypatch.setattr("tmux_lib.tmux_inputBoxHoldsText",
+                        lambda p: next(holds))
+    # Test action.
+    rc = tmux_sendAndSubmit("p", "x")
+    # Test verification: initial Enter plus two retries, rc 0.
+    assert rc == 0
+    assert enter_calls == ["p", "p", "p"]
 
 
 def test_tmux_cancelAndSend_stops_retrying_once_marker_seen(monkeypatch):

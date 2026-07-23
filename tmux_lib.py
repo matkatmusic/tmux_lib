@@ -324,13 +324,29 @@ def tmux_sendCtrlC(pane_target: str) -> int:
     return result.returncode
 
 
-# Sends text to pane, sleeps 0.5s, then sends Enter as a separate call; returns first nonzero rc or rc of Enter send.
+# True if the pane's input box still holds unsubmitted text: a visible line reading `❯ <content>`.
+def tmux_inputBoxHoldsText(pane_target: str) -> bool:
+    content = tmux_capturePane(pane_target)
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("❯") and stripped[1:].strip():
+            return True
+    return False
+
+
+# Sends text to pane, sleeps 0.5s, then sends Enter; the Claude Code TUI can swallow an Enter that arrives while it is still coalescing the pasted text, so if the input box still shows text the Enter is resent (up to 4 retries, 1s apart). Returns first nonzero rc or rc of the last Enter send.
 def tmux_sendAndSubmit(pane_target: str, text: str) -> int:
     rc1 = tmux_sendKeys(pane_target, text)
     if rc1 != 0:
         return rc1
     time.sleep(0.5)
-    return tmux_sendEnter(pane_target)
+    rc = tmux_sendEnter(pane_target)
+    for _ in range(4):
+        time.sleep(1.0)
+        if not tmux_inputBoxHoldsText(pane_target):
+            break
+        rc = tmux_sendEnter(pane_target)
+    return rc
 
 # Repeatedly sends Ctrl-C (up to 5 times) until the pane buffer contains a 'Ctrl-C' marker, then submits the replacement text; logs label + Ctrl-C count when at least one retry was needed. Returns rc of final tmux_sendAndSubmit.
 def tmux_cancelAndSend(pane_target: str, text: str, label: str | None = None) -> int:
