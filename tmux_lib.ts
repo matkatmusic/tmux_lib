@@ -511,7 +511,7 @@ export const tmux_lib = {
     return rc;
   },
 
-  // Repeatedly sends Ctrl-C (up to 5 times) until the pane buffer contains a 'Ctrl-C' marker, then submits the replacement text; logs label + Ctrl-C count when at least one retry was needed.
+  // Sends Ctrl-C up to 5 times until the pane shows 'Ctrl-C', then submits text; logs label when retried.
   tmux_cancelAndSend(pane_target: string, text: string, label: string | undefined = undefined): number {
     const MAX_ATTEMPTS: number = 5;
     let attempts: number = 0;
@@ -529,7 +529,7 @@ export const tmux_lib = {
     return tmux_lib.tmux_sendAndSubmit(pane_target, text);
   },
 
-  // Splits target via tmux split-window with -c <cwd> -P -F '#{pane_id}', launching cmd; returns the resulting pane id. Returns undefined on tmux failure or empty pane id.
+  // Splits target with tmux split-window in cwd, running cmd; returns the new pane id, or undefined on failure.
   tmux_splitWorkerPane(target: string, cwd: string, cmd: string): string | undefined {
     const argv: string[] = ["tmux", "split-window", "-t", target, "-c", cwd, "-P", "-F", "#{pane_id}", cmd];
     const result: RunResult = tmux_lib.run(argv, { capture_output: true, text: true, check: false });
