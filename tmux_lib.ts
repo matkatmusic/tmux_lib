@@ -1,4 +1,5 @@
-import { tmux_lib_internal, type BytesRunOptions, type RunFn, type RunResult, type TextRunOptions } from "./tmux_lib_internal.ts";
+import { writeFileSync } from "node:fs";
+import { tmux_lib_internal,type BytesRunOptions, type RunFn, type RunResult, type TextRunOptions } from "./tmux_lib_internal.ts";
 
 if (process.env.BUN_JSC_useTailCalls !== "0") {
   throw new Error(
@@ -545,27 +546,138 @@ export const tmux_lib = {
     return pane_id;
   },
 
-  // Polls pane content for the Claude TUI ready glyph (❯, U+276F) every 0.5s up to timeout*2 attempts; returns 0 on detect, 1 on timeout. Capture errors are swallowed.
-  tmux_waitForClaudeReadiness(pane_id: string, timeout: number = 10): number {
-    const max_attempts: number = Math.trunc(timeout) * 2;
-    const ready_glyph: string = "❯";
-    for (let i: number = 0; i < max_attempts; i++) {
-      let content: string;
-      try {
-        content = tmux_lib.tmux_capturePane(pane_id, 5);
+  // Answers a trust or other "Esc to cancel" dialog shown in `screen`: Down if No is selected, else Enter. True if a dialog was shown.
+  tmux_answerDialog(pane_target: string, screen: string): boolean {
+    const lowered: string = screen.toLowerCase();
+    const is_trust_prompt: boolean = lowered.includes("trust this folder") || lowered.includes("trust the files");
+    const is_dialog: boolean = screen.includes("Esc to cancel") || is_trust_prompt;
+    const is_no_selected: boolean = screen.includes("❯ No, exit");
+    if (is_trust_prompt && is_no_selected) {
+      tmux_lib.tmux_sendKeys(pane_target, "Down");
+    }
+    else if (is_dialog) {
+      tmux_lib.tmux_sendEnter(pane_target);
+    }
+    return is_dialog;
+  },
+
+  // Polls the pane up to `polls` times for the ready glyph (❯), answering dialogs; throws if signed out. Returns 0 when ready, 1 on timeout.
+  tmux_waitForClaudeReadiness(
+    pane_id: string,
+    polls: number = 120,
+    poll_seconds: number = 1,
+    dialog_wait_seconds: number = 2,
+  ): number {
+    for (let i: number = 0; i < polls; i++) {
+      const content: string = tmux_lib.tmux_capturePane(pane_id);
+      const lowered: string = content.toLowerCase();
+      if (lowered.includes("login method") || lowered.includes("/login")) {
+        throw new Error(`Claude is signed out in pane ${pane_id}. Sign in once, then try again.`);
       }
-      catch (e: unknown) {
-        content = "";
+      if (tmux_lib.tmux_answerDialog(pane_id, content)) {
+        tmux_lib.sleep(dialog_wait_seconds);
+        continue;
       }
-      if ((content || "").includes(ready_glyph)) {
+      if (content.includes("❯")) {
         return 0;
+      }
+      tmux_lib.sleep(poll_seconds);
+    }
+    tmux_lib.stderrWrite(
+      `[tmux-launcher] tmux_waitForClaudeReadiness: timed out after ${polls} polls waiting for pane '${pane_id}'\n`,
+    );
+    return 1;
+  },
+
+  // Waits until the pane is not busy (per busy_regex) for settle_seconds after check_activity first reports activity. Returns the first watch_regex match.
+  tmux_waitForTurnEnd(
+    pane_target: string,
+    busy_regex: RegExp,
+    settle_seconds: number,
+    timeout_seconds: number,
+    check_activity: () => boolean,
+    watch_regex: RegExp | undefined = undefined,
+  ): string | undefined {
+    let has_grown: boolean = false;
+    let quiet_since: number | undefined = undefined;
+    let watch_match: string | undefined = undefined;
+    let screen: string = "";
+    const deadline: number = Date.now() + timeout_seconds * 1000;
+    while (Date.now() < deadline) {
+      screen = tmux_lib.tmux_capturePane(pane_target);
+      if (watch_regex !== undefined && watch_match === undefined) {
+        const found: RegExpMatchArray | null = screen.match(watch_regex);
+        if (found) {
+          watch_match = found[0];
+        }
+      }
+      if (check_activity()) {
+        has_grown = true;
+        quiet_since = undefined;
+      }
+      if (tmux_lib.tmux_answerDialog(pane_target, screen)) {
+        quiet_since = undefined;
+        tmux_lib.sleep(1);
+        continue;
+      }
+      if (screen.search(busy_regex) !== -1) {
+        quiet_since = undefined;
+      }
+      else if (has_grown && quiet_since === undefined) {
+        quiet_since = Date.now();
+      }
+      if (quiet_since !== undefined && Date.now() - quiet_since >= settle_seconds * 1000) {
+        return watch_match;
       }
       tmux_lib.sleep(0.5);
     }
-    tmux_lib.stderrWrite(
-      `[tmux-launcher] tmux_waitForClaudeReadiness: timed out after ${timeout}s waiting for pane '${pane_id}'\n`,
-    );
-    return 1;
+    throw new Error(`turn did not end in pane ${pane_target}. Pane:\n${screen}`);
+  },
+
+  // True if tmux still finds the pane.
+  tmux_paneExists(pane_target: string): boolean {
+    return tmux_lib.tmux_hasSession(pane_target) === 0;
+  },
+
+  // Polls once a second until the pane is gone, answering dialogs. Returns true if it closed, false after timeout_seconds.
+  tmux_waitForPaneClose(pane_target: string, timeout_seconds: number): boolean {
+    const deadline: number = Date.now() + timeout_seconds * 1000;
+    while (Date.now() < deadline) {
+      if (!tmux_lib.tmux_paneExists(pane_target)) {
+        return true;
+      }
+      tmux_lib.tmux_answerDialog(pane_target, tmux_lib.tmux_capturePane(pane_target));
+      tmux_lib.sleep(1);
+    }
+    return false;
+  },
+
+  // Kills every pane in the target's window except the target, via `tmux kill-pane -a -t <target>`.
+  tmux_killOtherPanes(pane_target: string): number {
+    const cmd: string[] = ["tmux", "kill-pane", "-a", "-t", pane_target];
+    const result: RunResult = tmux_lib.run(cmd, { capture_output: true, text: true, check: false });
+    if (result.returncode !== 0) {
+      const caller: string = tmux_lib.callerName();
+      const combined: string = (result.stdout || "") + (result.stderr || "");
+      tmux_lib.stderrWrite(`[${caller}] command '${cmd.join(" ")}' failed: ${combined}\n`);
+    }
+    return result.returncode;
+  },
+
+  // Runs `tmux new-session -s <name>` attached to this terminal; blocks until the session ends. Extra args pass through.
+  tmux_newAttachedSession(session_name: string, ...extra_args: string[]): number {
+    const cmd: string[] = ["tmux", "new-session", "-s", session_name, ...extra_args];
+    const result: { returncode: number } = tmux_lib.run(cmd, { check: false });
+    if (result.returncode !== 0) {
+      const caller: string = tmux_lib.callerName();
+      tmux_lib.stderrWrite(`[${caller}] command '${cmd.join(" ")}' failed\n`);
+    }
+    return result.returncode;
+  },
+
+  // Writes the pane's visible text to `path`.
+  tmux_capturePaneToFile(pane_target: string, path: string): void {
+    writeFileSync(path, tmux_lib.tmux_capturePane(pane_target));
   },
 
   // Idempotently guarantees a keepalive pane with the requested title exists in a tmux window, creating and retiling only when absent.

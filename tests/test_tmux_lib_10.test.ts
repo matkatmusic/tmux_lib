@@ -29,7 +29,7 @@ test("test_tmux_waitForClaudeReadiness_returns_one_on_timeout_and_logs_stderr", 
   const rc: number = tmux_lib.tmux_waitForClaudeReadiness("%7", 2);
   const err: string = streams.err();
   expect(rc).toBe(1);
-  expect(sleep_calls).toEqual([0.5, 0.5, 0.5, 0.5]);
+  expect(sleep_calls).toEqual([1, 1]);
   expect(err).toContain("tmux_waitForClaudeReadiness");
   expect(err).toContain("timed out");
   expect(err).toContain("%7");
@@ -47,21 +47,15 @@ test("test_tmux_waitForClaudeReadiness_polls_until_ready", (): void => {
   expect(sleep_count.n).toBe(2);
 });
 
-test("test_tmux_waitForClaudeReadiness_swallows_capture_errors", (): void => {
-  const calls: { n: number } = { n: 0 };
+test("test_tmux_waitForClaudeReadiness_lets_capture_errors_throw", (): void => {
   spyOn(tmux_lib, "tmux_capturePane").mockImplementation(pyLambda(1, 2, (_pid: string, _lines?: number): string => {
-    calls.n += 1;
-    if (calls.n === 1) {
-      throw new Error("transient");
-    }
-    return READY_GLYPH;
+    throw new Error("transient");
   }));
   spyOn(tmux_lib, "sleep").mockImplementation(pyLambda(1, 1, (_s: number): void => {}));
-  expect(tmux_lib.tmux_waitForClaudeReadiness("%9", 2)).toBe(0);
-  expect(calls.n).toBe(2);
+  expect((): number => tmux_lib.tmux_waitForClaudeReadiness("%9", 2)).toThrow("transient");
 });
 
-test("test_tmux_waitForClaudeReadiness_default_timeout_is_ten_seconds", (): void => {
+test("test_tmux_waitForClaudeReadiness_default_poll_count_is_120", (): void => {
   const attempts: { n: number } = { n: 0 };
   spyOn(tmux_lib, "tmux_capturePane").mockImplementation(pyLambda(1, 2, (_pid: string, _lines?: number): string => {
     attempts.n += 1;
@@ -71,11 +65,11 @@ test("test_tmux_waitForClaudeReadiness_default_timeout_is_ten_seconds", (): void
   const streams: { out: () => string; err: () => string } = captureStreams();
   const rc: number = tmux_lib.tmux_waitForClaudeReadiness("%2");
   expect(rc).toBe(1);
-  expect(attempts.n).toBe(20);
+  expect(attempts.n).toBe(120);
   streams.err();
 });
 
-test("test_tmux_waitForClaudeReadiness_passes_pane_id_and_five_line_window", (): void => {
+test("test_tmux_waitForClaudeReadiness_captures_the_visible_screen_of_the_pane", (): void => {
   const seen: [string, number | undefined][] = [];
   spyOn(tmux_lib, "tmux_capturePane").mockImplementation(pyLambda(1, 2, (pid: string, lines: number | undefined = undefined): string => {
     seen.push([pid, lines]);
@@ -83,7 +77,7 @@ test("test_tmux_waitForClaudeReadiness_passes_pane_id_and_five_line_window", ():
   }));
   spyOn(tmux_lib, "sleep").mockImplementation(pyLambda(1, 1, (_s: number): void => {}));
   tmux_lib.tmux_waitForClaudeReadiness("%55", 1);
-  expect(seen).toEqual([["%55", 5]]);
+  expect(seen).toEqual([["%55", undefined]]);
 });
 
 test("test_tmux_requireVersion_returns_1_and_logs_when_tmux_binary_is_missing", (): void => {
