@@ -33,7 +33,7 @@ export function _make_fake_run(
 // Fixture tmux_session_opts: unique isolated session; the caller passes the name to tmux_session_opts_teardown.
 export function tmux_session_opts(): string {
   const name: string = `tmux-py-opt-test-${process.pid}`;
-  tmux_lib.run(["tmux", "kill-session", "-t", name]);
+  tmux_lib.run(["tmux", "kill-session", "-t", name], { capture_output: true, check: false });
   const rc: number = tmux_lib.tmux_newSession(name);
   if (rc !== 0) {
     throw new Error("fixture failed to create tmux session");
@@ -42,7 +42,7 @@ export function tmux_session_opts(): string {
 }
 
 export function tmux_session_opts_teardown(name: string): void {
-  tmux_lib.run(["tmux", "kill-session", "-t", name]);
+  tmux_lib.run(["tmux", "kill-session", "-t", name], { capture_output: true, check: false });
 }
 
 // Fixture tmux_session_panes: setup kills any stale session first.

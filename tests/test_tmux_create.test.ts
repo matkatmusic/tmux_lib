@@ -2,7 +2,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { spyOn } from "bun:test";
 import { tmux_lib } from "../tmux_lib.ts";
-import type { RunResult } from "../tmux_lib_internal.ts";
+import { tmux_lib_internal, type RunResult } from "../tmux_lib_internal.ts";
+import { pyLambda } from "./test_tmux_lib_helpers_c.ts";
 
 // === Bucket: Create ===
 // The Python file defines only helpers and fixtures: it has no test functions.
@@ -61,33 +62,33 @@ export function tmux_session_panes_teardown(name: string): void {
 
 // Setup helper: shell out to real tmux to check session existence.
 export function _tmux_has_session(name: string): boolean {
-  return tmux_lib.run(["tmux", "has-session", "-t", name]).returncode === 0;
+  return tmux_lib.run(["tmux", "has-session", "-t", name], { stdout: "DEVNULL", stderr: "DEVNULL" }).returncode === 0;
 }
 
 // Setup helper: list windows and look for an exact name match.
 export function _tmux_window_exists(session: string, window: string): boolean {
-  const r: RunResult = tmux_lib.run(["tmux", "list-windows", "-t", session, "-F", "#{window_name}"]);
+  const r: RunResult = tmux_lib.run(["tmux", "list-windows", "-t", session, "-F", "#{window_name}"], { capture_output: true, text: true });
   if (r.returncode !== 0) {
     return false;
   }
-  return r.stdout.split("\n").includes(window);
+  return tmux_lib_internal.splitlines(r.stdout).includes(window);
 }
 
 // Setup helper: query pane_title via display-message.
 export function _tmux_pane_has_title(target: string, title: string): boolean {
-  const r: RunResult = tmux_lib.run(["tmux", "display-message", "-p", "-t", target, "#{pane_title}"]);
-  return r.returncode === 0 && r.stdout.trim() === title;
+  const r: RunResult = tmux_lib.run(["tmux", "display-message", "-p", "-t", target, "#{pane_title}"], { capture_output: true, text: true });
+  return r.returncode === 0 && tmux_lib_internal.strip(r.stdout) === title;
 }
 
 // Setup helper: read tmux option value, empty string on miss.
 export function _tmux_show_option(target: string, opt: string): string {
-  const r: RunResult = tmux_lib.run(["tmux", "show-options", "-t", target, "-v", opt]);
-  return r.returncode === 0 ? r.stdout.trim() : "";
+  const r: RunResult = tmux_lib.run(["tmux", "show-options", "-t", target, "-v", opt], { capture_output: true, text: true });
+  return r.returncode === 0 ? tmux_lib_internal.strip(r.stdout) : "";
 }
 
 // Teardown helper: session kill.
 export function _kill(name: string): void {
-  tmux_lib.run(["tmux", "kill-session", "-t", name]);
+  tmux_lib.run(["tmux", "kill-session", "-t", name], { stdout: "DEVNULL", stderr: "DEVNULL" });
 }
 
 // Fixture tmux_session_clean: unique session name; the caller passes it to _kill on teardown.
@@ -104,16 +105,16 @@ export function _writeSidecar(tmpdir_inv: string, pane_id: string): void {
 // Fixture kill_calls: captures pane-id + retile-target instead of touching tmux.
 export function kill_calls(): { calls: [string, string][]; fake_bg: (pane_target: string, retile_target: string) => void } {
   const calls: [string, string][] = [];
-  const fake_bg = (pane_target: string, retile_target: string): void => {
+  const fake_bg = pyLambda(2, 2, (pane_target: string, retile_target: string): void => {
     calls.push([pane_target, retile_target]);
-  };
+  });
   return { calls, fake_bg };
 }
 
 // Fixture fake_tmux: fakes tmux_lib._tmux_live_pane_ids with a configurable set; call mock.restore() on teardown.
 export function fake_tmux(): { live: Set<string> } {
   const state: { live: Set<string> } = { live: new Set<string>() };
-  spyOn(tmux_lib, "_tmux_live_pane_ids").mockImplementation((): Set<string> => new Set<string>(state.live));
+  spyOn(tmux_lib, "_tmux_live_pane_ids").mockImplementation(pyLambda(0, 0, (): Set<string> => new Set<string>(state.live)));
   return state;
 }
 
