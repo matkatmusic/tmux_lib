@@ -1,10 +1,10 @@
 import { expect } from "bun:test";
 import { tmux_lib } from "./tmux_lib.ts";
 import { tmux_lib_internal, type RunResult } from "./tmux_lib_internal.ts";
-import { stubRun, test } from "./tests/test_tmux_lib_helpers_a.ts";
-import { captureStreams, useTestHooks } from "./tests/test_tmux_lib_helpers_c.ts";
+import { setStubRun, test } from "./tests/test_tmux_lib_helpers_a.ts";
+import { getCaptureStreams, installTestHooks } from "./tests/test_tmux_lib_helpers_c.ts";
 
-useTestHooks();
+installTestHooks();
 
 const TEXT_RUN: { capture_output: true; text: true; check: false } = { capture_output: true, text: true, check: false };
 const CHECKED_TEXT_RUN: { capture_output: true; text: true; check: true } = { capture_output: true, text: true, check: true };
@@ -36,8 +36,8 @@ function toPrintfOctal(bytes: number[]): string {
 }
 
 test("callerName_names_an_outside_function_that_ends_with_return_of_a_tmux_call", (): void => {
-  stubRun(1, "", "boom");
-  const streams: { out: () => string; err: () => string } = captureStreams();
+  setStubRun(1, "", "boom");
+  const streams: { out: () => string; err: () => string } = getCaptureStreams();
   function outsideTailCaller(): number {
     return tmux_lib.tmux_sendEnter("%1");
   }
@@ -46,12 +46,36 @@ test("callerName_names_an_outside_function_that_ends_with_return_of_a_tmux_call"
 });
 
 test("callerName_reports_lambda_for_a_nameless_function", (): void => {
-  stubRun(1, "", "boom");
-  const streams: { out: () => string; err: () => string } = captureStreams();
+  setStubRun(1, "", "boom");
+  const streams: { out: () => string; err: () => string } = getCaptureStreams();
   (function (): void {
     tmux_lib.tmux_sendEnter("%1");
   })();
   expect(streams.err()).toContain("[<lambda>] command");
+});
+
+test("callerName_reports___init___for_a_call_from_a_class_constructor", (): void => {
+  setStubRun(1, "", "boom");
+  const streams: { out: () => string; err: () => string } = getCaptureStreams();
+  class D {
+    constructor() {
+      tmux_lib.tmux_sendEnter("%1");
+    }
+  }
+  new D();
+  expect(streams.err()).toContain("[__init__] command");
+});
+
+test("pyInt_and_requireVersion_throw_Python_ValueError_over_4300_digits", (): void => {
+  const message = (count: number): string =>
+    `Exceeds the limit (4300 digits) for integer string conversion: value has ${count} digits; use sys.set_int_max_str_digits() to increase the limit`;
+  expect(tmux_lib._pyInt("9".repeat(4300))).toBe(10n ** 4300n - 1n);
+  expect((): bigint => tmux_lib._pyInt("9".repeat(4301))).toThrow(message(4301));
+  expect((): bigint => tmux_lib._pyInt("\u{1d7d7}".repeat(4301))).toThrow(message(4301));
+  setStubRun(0, "tmux 3.4\n");
+  const requireHuge = (): number => tmux_lib.tmux_requireVersion("9".repeat(5000) + ".1");
+  expect(requireHuge).toThrow(tmux_lib_internal.ValueError);
+  expect(requireHuge).toThrow(message(5000));
 });
 
 test("decodeText_builds_Python_UnicodeDecodeError_messages", (): void => {
@@ -66,8 +90,8 @@ test("pyRepr_escapes_a_character_Bun_assigns_but_Python_does_not", (): void => {
 });
 
 test("requireVersion_does_not_read_an_unassigned_Python_digit", (): void => {
-  stubRun(0, "tmux \u{11de0}.1\n");
-  const streams: { out: () => string; err: () => string } = captureStreams();
+  setStubRun(0, "tmux \u{11de0}.1\n");
+  const streams: { out: () => string; err: () => string } = getCaptureStreams();
   expect(tmux_lib.tmux_requireVersion("3.1")).toBe(1);
   expect(streams.err()).toBe("[tmux] tmux is not installed\n");
 });

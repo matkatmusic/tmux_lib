@@ -2,14 +2,14 @@ import { describe, expect } from "bun:test";
 import { tmux_lib } from "../tmux_lib.ts";
 import { tmux_lib_internal, type RunResult } from "../tmux_lib_internal.ts";
 import { LIVE_TIMEOUT_MS, test } from "./test_tmux_lib_helpers_a.ts";
-import { firstPaneId, sessionNameFixture, tmuxSessionPanesFixture } from "./test_tmux_lib_helpers_b.ts";
-import { useTestHooks } from "./test_tmux_lib_helpers_c.ts";
+import { getFirstPaneId, createSessionNameFixture, createSessionPanesFixture } from "./test_tmux_lib_helpers_b.ts";
+import { installTestHooks } from "./test_tmux_lib_helpers_c.ts";
 
-useTestHooks();
+installTestHooks();
 
 describe("live", (): void => {
   test("test_hasSession_returnsFalse_afterKill", (): void => {
-    const session_name: string = sessionNameFixture();
+    const session_name: string = createSessionNameFixture();
     expect(tmux_lib.tmux_newSession(session_name)).toBe(0);
     expect(tmux_lib.tmux_killSession(session_name)).toBe(0);
     const rc: number = tmux_lib.tmux_hasSession(session_name);
@@ -17,40 +17,40 @@ describe("live", (): void => {
   }, LIVE_TIMEOUT_MS);
 
   test("test_hasSession_returnsFalse_forNonexistentSession", (): void => {
-    const session_name: string = sessionNameFixture();
+    const session_name: string = createSessionNameFixture();
     const rc: number = tmux_lib.tmux_hasSession(session_name);
     expect(rc).not.toBe(0);
   }, LIVE_TIMEOUT_MS);
 
   test("test_hasSession_returnsTrue_forExistingSession", (): void => {
-    const session_name: string = sessionNameFixture();
+    const session_name: string = createSessionNameFixture();
     expect(tmux_lib.tmux_newSession(session_name)).toBe(0);
     const rc: number = tmux_lib.tmux_hasSession(session_name);
     expect(rc).toBe(0);
   }, LIVE_TIMEOUT_MS);
 
   test("test_listPanes_newSession_hasOnePane", (): void => {
-    const tmux_session_panes: string = tmuxSessionPanesFixture();
+    const tmux_session_panes: string = createSessionPanesFixture();
     const panes: string[] = tmux_lib.tmux_listPanes(tmux_session_panes);
     expect(panes.length).toBe(1);
   }, LIVE_TIMEOUT_MS);
 
   test("test_listPanes_afterNewPane_hasTwoPanes", (): void => {
-    const tmux_session_panes: string = tmuxSessionPanesFixture();
+    const tmux_session_panes: string = createSessionPanesFixture();
     expect(tmux_lib.tmux_newPane(tmux_session_panes)).toBe(0);
     const panes: string[] = tmux_lib.tmux_listPanes(tmux_session_panes);
     expect(panes.length).toBe(2);
   }, LIVE_TIMEOUT_MS);
 
   test("test_capturePane_returnsContent", (): void => {
-    const tmux_session_panes: string = tmuxSessionPanesFixture();
-    const pid: string = firstPaneId(tmux_session_panes);
+    const tmux_session_panes: string = createSessionPanesFixture();
+    const pid: string = getFirstPaneId(tmux_session_panes);
     const captured: string = tmux_lib.tmux_capturePane(pid);
     expect(typeof captured).toBe("string");
   }, LIVE_TIMEOUT_MS);
 
   test("test_listPanes_afterKillPane_hasOnePane", (): void => {
-    const tmux_session_panes: string = tmuxSessionPanesFixture();
+    const tmux_session_panes: string = createSessionPanesFixture();
     expect(tmux_lib.tmux_newPane(tmux_session_panes)).toBe(0);
     const ids: string[] = tmux_lib.tmux_listPanes(tmux_session_panes, "-F", "#{pane_id}");
     expect(tmux_lib.tmux_killPane(ids[1]!)).toBe(0);

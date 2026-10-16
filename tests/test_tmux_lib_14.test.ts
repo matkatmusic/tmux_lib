@@ -1,10 +1,10 @@
 import { expect, spyOn } from "bun:test";
 import { tmux_lib } from "../tmux_lib.ts";
 import { tmux_lib_internal } from "../tmux_lib_internal.ts";
-import { makeFakeRun, stubRun, test } from "./test_tmux_lib_helpers_a.ts";
-import { captureStreams, pyLambda, useTestHooks } from "./test_tmux_lib_helpers_c.ts";
+import { buildFakeRun, setStubRun, test } from "./test_tmux_lib_helpers_a.ts";
+import { getCaptureStreams, buildPyLambda, installTestHooks } from "./test_tmux_lib_helpers_c.ts";
 
-useTestHooks();
+installTestHooks();
 
 test("parity_strip_uses_the_Python_isspace_set", (): void => {
   expect(tmux_lib_internal.strip("\x1c\x1d\x1e\x1f\x85\u{a0}\u{3000} x \t\n\r\v\f\u{2028}\u{2029}\u{202f}\u{205f}")).toBe("x");
@@ -14,9 +14,9 @@ test("parity_strip_uses_the_Python_isspace_set", (): void => {
 });
 
 test("parity_inputBoxHoldsText_strips_with_the_Python_whitespace_set", (): void => {
-  stubRun(0, "\x1f❯\x1f hello\n");
+  setStubRun(0, "\x1f❯\x1f hello\n");
   expect(tmux_lib.tmux_inputBoxHoldsText("%1")).toBe(true);
-  stubRun(0, "\u{276f}\x1f\u{a0}\n");
+  setStubRun(0, "\u{276f}\x1f\u{a0}\n");
   expect(tmux_lib.tmux_inputBoxHoldsText("%1")).toBe(false);
 });
 
@@ -32,14 +32,14 @@ test("parity_pyRepr_matches_Python_repr_for_strings", (): void => {
 });
 
 test("parity_requireVersion_reads_non_ASCII_decimal_digits_like_Python_int", (): void => {
-  stubRun(0, "tmux \u{663}.\u{661}\n");
+  setStubRun(0, "tmux \u{663}.\u{661}\n");
   expect(tmux_lib.tmux_requireVersion("3.1")).toBe(0);
   expect(tmux_lib.tmux_requireVersion("3.2")).toBe(1);
   expect(tmux_lib._pyInt("\u{663}\u{661}")).toBe(31n);
 });
 
 test("parity_default_capture_collects_direct_writes_like_capsys", (): void => {
-  const streams: { out: () => string; err: () => string } = captureStreams();
+  const streams: { out: () => string; err: () => string } = getCaptureStreams();
   process.stdout.write("w-out;");
   process.stderr.write("w-err;");
   console.log("c-out", 1);
@@ -51,15 +51,15 @@ test("parity_default_capture_collects_direct_writes_like_capsys", (): void => {
 });
 
 test("parity_fixed_arity_fake_raises_TypeError_on_a_wrong_argument_count", (): void => {
-  const lambda_p_t = pyLambda(2, 2, (p: string, t: string): string => p + t);
+  const lambda_p_t = buildPyLambda(2, 2, (p: string, t: string): string => p + t);
   expect(lambda_p_t("a", "b")).toBe("ab");
   expect((): string => (lambda_p_t as unknown as (p: string) => string)("a")).toThrow(TypeError);
   expect((): string => (lambda_p_t as unknown as (...a: string[]) => string)("a", "b", "c")).toThrow(TypeError);
 });
 
 function tmuxFailureLog(call: () => unknown): string {
-  stubRun(1, "", "boom");
-  const streams: { out: () => string; err: () => string } = captureStreams();
+  setStubRun(1, "", "boom");
+  const streams: { out: () => string; err: () => string } = getCaptureStreams();
   const before: number = streams.err().length;
   call();
   return streams.err().slice(before);
@@ -111,7 +111,7 @@ test("parity_caller_name_is_module_for_top_level_code", (): void => {
 const moduleLevelRun: typeof tmux_lib.run = tmux_lib.run;
 const moduleLevelStderrWrite: typeof tmux_lib.stderrWrite = tmux_lib.stderrWrite;
 let moduleLevelFailureLog: string = "";
-tmux_lib.run = makeFakeRun(1, "", "boom");
+tmux_lib.run = buildFakeRun(1, "", "boom");
 tmux_lib.stderrWrite = (text: string): void => {
   moduleLevelFailureLog += text;
 };

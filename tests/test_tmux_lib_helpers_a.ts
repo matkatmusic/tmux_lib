@@ -1,7 +1,7 @@
 import { spyOn, test as bunTest } from "bun:test";
 import { tmux_lib } from "../tmux_lib.ts";
 import type { RunFn, RunResult } from "../tmux_lib_internal.ts";
-import { pyLambda } from "./test_tmux_lib_helpers_c.ts";
+import { buildPyLambda } from "./test_tmux_lib_helpers_c.ts";
 
 export const tmuxInstalled: boolean = Bun.which("tmux") !== null;
 export const test: typeof bunTest = (tmuxInstalled ? bunTest : bunTest.skip) as typeof bunTest;
@@ -10,18 +10,18 @@ export const LIVE_TIMEOUT_MS: number = 60000;
 export const READY_GLYPH: string = "❯";
 
 // Types a text-mode fake as the overloaded run seam.
-export function fakeRun(impl: (argv: string[], options: object) => RunResult): RunFn {
+export function wrapFakeRun(impl: (argv: string[], options: object) => RunResult): RunFn {
   return impl as unknown as RunFn;
 }
 
 // Fakes the tmux_lib.run seam: records each argv in `calls` and returns the canned result.
-export function makeFakeRun(
+export function buildFakeRun(
   rc: number,
   stdout: string = "",
   stderr: string = "",
   calls: string[][] | undefined = undefined,
 ): RunFn {
-  return fakeRun(pyLambda(1, Infinity, (argv: string[]): RunResult => {
+  return wrapFakeRun(buildPyLambda(1, Infinity, (argv: string[]): RunResult => {
     if (calls !== undefined) {
       calls.push(argv);
     }
@@ -29,12 +29,12 @@ export function makeFakeRun(
   }));
 }
 
-export function stubRun(rc: number, stdout: string = "", stderr: string = "", calls: string[][] | undefined = undefined): void {
-  spyOn(tmux_lib, "run").mockImplementation(makeFakeRun(rc, stdout, stderr, calls));
+export function setStubRun(rc: number, stdout: string = "", stderr: string = "", calls: string[][] | undefined = undefined): void {
+  spyOn(tmux_lib, "run").mockImplementation(buildFakeRun(rc, stdout, stderr, calls));
 }
 
 // Stands in for Python iter()/next(): throws when exhausted (StopIteration).
-export function makeIter<T>(items: T[]): () => T {
+export function buildIter<T>(items: T[]): () => T {
   let index: number = 0;
   return (): T => {
     if (index >= items.length) {
@@ -47,11 +47,11 @@ export function makeIter<T>(items: T[]): () => T {
 }
 
 // Runs the real tmux binary directly, bypassing every tmux_lib seam.
-export function realTmux(...args: string[]): RunResult {
+export function executeRealTmux(...args: string[]): RunResult {
   const proc: Bun.SyncSubprocess<"pipe", "pipe"> = Bun.spawnSync(["tmux", ...args], { stdout: "pipe", stderr: "pipe" });
   return { returncode: proc.exitCode ?? -1, stdout: proc.stdout.toString(), stderr: proc.stderr.toString() };
 }
 
-export function uniqueSuffix(): string {
+export function generateUniqueSuffix(): string {
   return `${process.pid}-${process.hrtime.bigint()}`;
 }

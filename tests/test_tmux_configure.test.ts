@@ -1,5 +1,7 @@
 import { tmux_lib } from "../tmux_lib.ts";
 import type { RunResult } from "../tmux_lib_internal.ts";
+import { executeRealTmux } from "./test_tmux_lib_helpers_a.ts";
+import { addTeardown, buildPyLambda } from "./test_tmux_lib_helpers_c.ts";
 
 // === Bucket: Configure ===
 // The Python file defines only helpers and fixtures: it has no test functions.
@@ -21,29 +23,32 @@ export function _make_fake_run(
   stdout: string = "",
   stderr: string = "",
   calls: string[][] | undefined = undefined,
-): (argv: string[]) => RunResult {
-  return (argv: string[]): RunResult => {
+): (argv: string[]) => RunResult & { args: string[] } {
+  return buildPyLambda(1, Infinity, (argv: string[]): RunResult & { args: string[] } => {
     if (calls !== undefined) {
       calls.push(argv);
     }
-    return { returncode: rc, stdout, stderr };
-  };
+    return { args: argv, returncode: rc, stdout, stderr };
+  });
 }
 
-// Fixture tmux_session_opts: unique isolated session; the caller passes the name to tmux_session_opts_teardown.
+// Fixture tmux_session_opts: unique isolated session, killed again at teardown.
 export function tmux_session_opts(): string {
   const name: string = `tmux-py-opt-test-${process.pid}`;
-  tmux_lib.run(["tmux", "kill-session", "-t", name], { capture_output: true, check: false });
+  executeRealTmux("kill-session", "-t", name);
   const rc: number = tmux_lib.tmux_newSession(name);
   if (rc !== 0) {
     throw new Error("fixture failed to create tmux session");
   }
+  addTeardown((): void => {
+    executeRealTmux("kill-session", "-t", name);
+  });
   return name;
 }
 
-export function tmux_session_opts_teardown(name: string): void {
-  tmux_lib.run(["tmux", "kill-session", "-t", name], { capture_output: true, check: false });
-}
+// export function tmux_session_opts_teardown(name: string): void {
+//   tmux_lib.run(["tmux", "kill-session", "-t", name], { capture_output: true, check: false });
+// }
 
 // Fixture tmux_session_panes: setup kills any stale session first.
 export function tmux_session_panes(): string {
@@ -53,12 +58,15 @@ export function tmux_session_panes(): string {
   if (rc !== 0) {
     throw new Error("fixture precondition: new session must succeed");
   }
+  addTeardown((): void => {
+    tmux_lib.tmux_killSession(name);
+  });
   return name;
 }
 
-export function tmux_session_panes_teardown(name: string): void {
-  tmux_lib.tmux_killSession(name);
-}
+// export function tmux_session_panes_teardown(name: string): void {
+//   tmux_lib.tmux_killSession(name);
+// }
 
 // Helper: returns the first pane id (e.g. "%0") in the session.
 export function _first_pane_id(session: string): string {
@@ -72,9 +80,12 @@ export function layout_session(): string {
   tmux_lib.tmux_newSession(name);
   tmux_lib.tmux_newPane(name);
   tmux_lib.tmux_newPane(name);
+  addTeardown((): void => {
+    tmux_lib.tmux_killSession(name);
+  });
   return name;
 }
 
-export function layout_session_teardown(name: string): void {
-  tmux_lib.tmux_killSession(name);
-}
+// export function layout_session_teardown(name: string): void {
+//   tmux_lib.tmux_killSession(name);
+// }

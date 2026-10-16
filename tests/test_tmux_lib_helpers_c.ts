@@ -5,20 +5,20 @@ import { tmux_lib_internal } from "../tmux_lib_internal.ts";
 let capturedOut: string = "";
 let capturedErr: string = "";
 
-function textOf(chunk: unknown): string {
+function getChunkText(chunk: unknown): string {
   return typeof chunk === "string" ? chunk : Buffer.from(chunk as Uint8Array).toString();
 }
 
 // Stands in for pytest default capture: nothing reaches the real stdout/stderr during a test.
-function startCapture(): void {
+function initCapture(): void {
   capturedOut = "";
   capturedErr = "";
   spyOn(process.stdout, "write").mockImplementation((chunk: unknown): boolean => {
-    capturedOut += textOf(chunk);
+    capturedOut += getChunkText(chunk);
     return true;
   });
   spyOn(process.stderr, "write").mockImplementation((chunk: unknown): boolean => {
-    capturedErr += textOf(chunk);
+    capturedErr += getChunkText(chunk);
     return true;
   });
   spyOn(console, "log").mockImplementation((...args: unknown[]): void => {
@@ -30,7 +30,7 @@ function startCapture(): void {
 }
 
 // Stands in for pytest capsys/capfd: reads the capture that every test already has.
-export function captureStreams(): { out: () => string; err: () => string } {
+export function getCaptureStreams(): { out: () => string; err: () => string } {
   return { out: (): string => capturedOut, err: (): string => capturedErr };
 }
 
@@ -42,34 +42,37 @@ export function addTeardown(teardown: () => void): void {
 }
 
 // Python: subprocess.run(["tmux", "kill-session", "-t", name], capture_output=True, check=False)
-export function killRealSession(name: string): void {
+export function stopRealSession(name: string): void {
   tmux_lib_internal.run(["tmux", "kill-session", "-t", name], { capture_output: true, check: false });
 }
 
 // Python: subprocess.run(["tmux", "kill-session", "-t", name], stdout=DEVNULL, stderr=DEVNULL)
-export function killSessionQuietly(name: string): void {
+export function stopSessionQuietly(name: string): void {
   tmux_lib_internal.run(["tmux", "kill-session", "-t", name], { stdout: "DEVNULL", stderr: "DEVNULL" });
 }
 
 // Teardown runs after the test's mocks are restored, still under capture, in reverse setup order.
-function cleanup(): void {
+function executeTeardowns(): void {
   mock.restore();
-  startCapture();
+  initCapture();
   while (teardowns.length > 0) {
     teardowns.pop()!();
   }
   mock.restore();
 }
 
-export function useTestHooks(): void {
-  beforeEach(startCapture);
-  afterEach(cleanup);
+export function installTestHooks(): void {
+  beforeEach(initCapture);
+  afterEach(executeTeardowns);
 }
 
 // Stands in for a Python lambda/def with a fixed parameter list: a wrong argument count raises TypeError.
-export function pyLambda<F extends (...args: never[]) => unknown>(min: number, max: number, fn: F): F {
+export function buildPyLambda<F extends (...args: never[]) => unknown>(min: number, max: number, fn: F): F {
   return ((...args: unknown[]): unknown => {
-    if (args.length < min || args.length > max) {
+    const isTooFew: boolean = args.length < min;
+    const isTooMany: boolean = args.length > max;
+    const hasBadCount: boolean = isTooFew || isTooMany;
+    if (hasBadCount) {
       throw new TypeError(`takes ${min} to ${max} positional arguments but ${args.length} were given`);
     }
     return (fn as unknown as (...a: unknown[]) => unknown)(...args);

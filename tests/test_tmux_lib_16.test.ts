@@ -1,9 +1,9 @@
 import { afterEach, expect, setSystemTime, spyOn } from "bun:test";
 import { tmux_lib } from "../tmux_lib.ts";
 import { test } from "./test_tmux_lib_helpers_a.ts";
-import { pyLambda, useTestHooks } from "./test_tmux_lib_helpers_c.ts";
+import { buildPyLambda, installTestHooks } from "./test_tmux_lib_helpers_c.ts";
 
-useTestHooks();
+installTestHooks();
 afterEach((): void => {
   setSystemTime();
 });
@@ -14,7 +14,7 @@ const BUSY: RegExp = /^\S \w+…|…\s*\(\d+[ms]|esc to interrupt/m;
 function fakeClock(): number[] {
   const sleeps: number[] = [];
   setSystemTime(new Date(1_000_000));
-  spyOn(tmux_lib, "sleep").mockImplementation(pyLambda(1, 1, (s: number): void => {
+  spyOn(tmux_lib, "sleep").mockImplementation(buildPyLambda(1, 1, (s: number): void => {
     sleeps.push(s);
     setSystemTime(new Date(Date.now() + s * 1000));
   }));
@@ -24,7 +24,7 @@ function fakeClock(): number[] {
 // Fakes capture: one screen per poll, the last one repeats. Records the pane asked for.
 function fakeScreens(screens: string[]): string[] {
   const panes: string[] = [];
-  spyOn(tmux_lib, "tmux_capturePane").mockImplementation(pyLambda(1, 2, (pane: string, _l?: number): string => {
+  spyOn(tmux_lib, "tmux_capturePane").mockImplementation(buildPyLambda(1, 2, (pane: string, _l?: number): string => {
     panes.push(pane);
     return screens[Math.min(panes.length - 1, screens.length - 1)]!;
   }));
@@ -33,7 +33,7 @@ function fakeScreens(screens: string[]): string[] {
 
 function fakeKeys(): string[] {
   const keys: string[] = [];
-  spyOn(tmux_lib, "tmux_sendEnter").mockImplementation(pyLambda(1, 1, (pane: string): number => {
+  spyOn(tmux_lib, "tmux_sendEnter").mockImplementation(buildPyLambda(1, 1, (pane: string): number => {
     keys.push(`${pane}:Enter`);
     return 0;
   }));
@@ -90,7 +90,7 @@ test("test_tmux_waitForPaneClose_returns_true_once_the_pane_is_gone", (): void =
   const sleeps: number[] = fakeClock();
   const keys: string[] = fakeKeys();
   const answers: boolean[] = [true, true, false];
-  spyOn(tmux_lib, "tmux_paneExists").mockImplementation(pyLambda(1, 1, (_p: string): boolean => answers.shift()!));
+  spyOn(tmux_lib, "tmux_paneExists").mockImplementation(buildPyLambda(1, 1, (_p: string): boolean => answers.shift()!));
   fakeScreens(["Esc to cancel"]);
   expect(tmux_lib.tmux_waitForPaneClose("%3", 60)).toBe(true);
   expect(sleeps).toEqual([1, 1]);
@@ -99,7 +99,7 @@ test("test_tmux_waitForPaneClose_returns_true_once_the_pane_is_gone", (): void =
 
 test("test_tmux_waitForPaneClose_returns_false_on_timeout", (): void => {
   const sleeps: number[] = fakeClock();
-  spyOn(tmux_lib, "tmux_paneExists").mockImplementation(pyLambda(1, 1, (_p: string): boolean => true));
+  spyOn(tmux_lib, "tmux_paneExists").mockImplementation(buildPyLambda(1, 1, (_p: string): boolean => true));
   fakeScreens(["working"]);
   expect(tmux_lib.tmux_waitForPaneClose("%3", 3)).toBe(false);
   expect(sleeps).toEqual([1, 1, 1]);
