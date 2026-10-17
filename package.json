@@ -1,0 +1,14 @@
+{
+  "name": "tmux_lib",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "BUN_JSC_useTailCalls=0 bun test",
+    "test:live": "BUN_JSC_useTailCalls=0 bun test -t '^live '",
+    "test:unit": "BUN_JSC_useTailCalls=0 bun test -t '^(?!live )'"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.3",
+    "typescript": "^7.0.2"
+  }
+}
