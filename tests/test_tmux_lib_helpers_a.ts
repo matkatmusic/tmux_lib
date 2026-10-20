@@ -21,12 +21,13 @@ export function buildFakeRun(
   stderr: string = "",
   calls: string[][] | undefined = undefined,
 ): RunFn {
-  return wrapFakeRun(buildPyLambda(1, Infinity, (argv: string[]): RunResult => {
+  function pushCallAndBuildResult(argv: string[]): RunResult {
     if (calls !== undefined) {
       calls.push(argv);
     }
     return { returncode: rc, stdout: stdout, stderr: stderr };
-  }));
+  }
+  return wrapFakeRun(buildPyLambda(1, Infinity, pushCallAndBuildResult));
 }
 
 export function setStubRun(rc: number, stdout: string = "", stderr: string = "", calls: string[][] | undefined = undefined): void {
