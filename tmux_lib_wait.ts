@@ -17,13 +17,14 @@ export const tmux_lib_wait = {
     return is_dialog;
   },
 
-  // Polls for the ready glyph, answering dialogs; throws if signed out. Returns 0 when ready, 1 on timeout.
+  // Polls for the ready glyph, answering dialogs; throws if signed out. Returns 0 when ready, 1 after timeout_seconds.
   tmux_waitForClaudeReadiness(
     pane_id: string,
-    polls: number = 120,
+    timeout_seconds: number = 120,
     poll_seconds: number = 1,
     dialog_wait_seconds: number = 2,
   ): number {
+    const polls: number = Math.ceil(timeout_seconds / poll_seconds);
     for (let i: number = 0; i < polls; i++) {
       const content: string = tmux_lib.tmux_capturePane(pane_id);
       const lowered: string = content.toLowerCase();
@@ -45,7 +46,7 @@ export const tmux_lib_wait = {
       tmux_lib.sleep(poll_seconds);
     }
     tmux_lib.stderrWrite(
-      `[tmux-launcher] tmux_waitForClaudeReadiness: timed out after ${polls} polls waiting for pane '${pane_id}'\n`,
+      `[tmux-launcher] tmux_waitForClaudeReadiness: timed out after ${timeout_seconds}s waiting for pane '${pane_id}'\n`,
     );
     return 1;
   },

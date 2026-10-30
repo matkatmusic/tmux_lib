@@ -26,3 +26,8 @@ test("tmux_inputBoxHoldsText_is_true_only_for_a_glyph_line_with_content", (): vo
   setStubRun(0, "❯  \n");
   expect(tmux_lib.tmux_inputBoxHoldsText("%1")).toBe(false);
 });
+
+test("tmux_inputBoxHoldsText_ignores_submitted_glyph_lines_above_an_empty_prompt", (): void => {
+  setStubRun(0, "❯ echo hi\nhi\n❯ \n");
+  expect(tmux_lib.tmux_inputBoxHoldsText("%1")).toBe(false);
+});

@@ -80,7 +80,7 @@ test("test_tmux_waitForClaudeReadiness_uses_given_poll_count_interval_and_dialog
     sleeps.push(s);
   }));
   const streams: { out: () => string; err: () => string } = getCaptureStreams();
-  expect(tmux_lib.tmux_waitForClaudeReadiness("%3", 3, 0.25, 7)).toBe(1);
+  expect(tmux_lib.tmux_waitForClaudeReadiness("%3", 0.75, 0.25, 7)).toBe(1);
   expect(sleeps).toEqual([0.25, 7, 0.25]);
   expect(streams.err()).toContain("timed out");
 });
@@ -107,7 +107,7 @@ test("test_tmux_paneExists_is_true_when_tmux_finds_the_pane", (): void => {
   const calls: string[][] = [];
   setStubRun(0, "", "", calls);
   expect(tmux_lib.tmux_paneExists("%3")).toBe(true);
-  expect(calls).toEqual([["tmux", "has-session", "-t", "%3"]]);
+  expect(calls).toEqual([["tmux", "display-message", "-p", "-t", "%3", "#{pane_id}"]]);
 });
 
 test("test_tmux_paneExists_is_false_when_the_pane_is_gone", (): void => {

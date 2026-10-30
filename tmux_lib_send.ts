@@ -38,20 +38,29 @@ export const tmux_lib_send = {
     return result.returncode;
   },
 
-  // True if the pane's input box still holds unsubmitted text: a visible line reading `❯ <content>`.
+  // True if the pane's input box still holds unsubmitted text: the LAST visible `❯` line has content.
   tmux_inputBoxHoldsText(pane_target: string): boolean {
     const content: string = tmux_lib.tmux_capturePane(pane_target);
+    let lastGlyphRest: string = "";
     for (const line of tmux_lib_internal.splitlines(content)) {
       const stripped: string = tmux_lib_internal.strip(line);
       const startsWithGlyph: boolean = stripped.startsWith("❯");
       if (startsWithGlyph) {
-        const rest: string = tmux_lib_internal.strip(stripped.slice(1));
-        if (rest) {
-          return true;
-        }
+        lastGlyphRest = tmux_lib_internal.strip(stripped.slice(1));
       }
     }
-    return false;
+    return lastGlyphRest !== "";
+    // for (const line of tmux_lib_internal.splitlines(content)) {
+    //   const stripped: string = tmux_lib_internal.strip(line);
+    //   const startsWithGlyph: boolean = stripped.startsWith("❯");
+    //   if (startsWithGlyph) {
+    //     const rest: string = tmux_lib_internal.strip(stripped.slice(1));
+    //     if (rest) {
+    //       return true;
+    //     }
+    //   }
+    // }
+    // return false;
   },
 
   // Sends text, then Enter; resends Enter up to 4 times while text remains. Returns first failure code.
