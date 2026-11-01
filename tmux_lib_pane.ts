@@ -121,7 +121,6 @@ export const tmux_lib_pane = {
     const cmd: string[] = ["tmux", "display-message", "-p", "-t", pane_target, "#{pane_id}"];
     const result: RunResult = tmux_lib.run(cmd, { capture_output: true, text: true, check: false });
     return result.returncode === 0;
-    // return tmux_lib.tmux_hasSession(pane_target) === 0;
   },
 
   // Writes the pane's visible text to `path`.

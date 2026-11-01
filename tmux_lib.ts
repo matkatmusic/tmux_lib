@@ -48,24 +48,6 @@ export const tmux_lib = {
   },
 
   // Stand-in for the Python call stack: running tmux_* function names, innermost last.
-  // callStack: [] as string[],
-  // Caller name reported when code outside this module calls a tmux_* function. Set it per test.
-  // externalCaller: "<unknown>",
 };
 
 // // Track the running tmux_* function names in callStack so callerName() can report the caller.
-// const members: Record<string, (...args: never[]) => unknown> = tmux_lib as unknown as Record<string, (...args: never[]) => unknown>;
-// for (const name of Object.keys(members)) {
-//   if (!name.startsWith("tmux_") && name !== "_tmux_backgroundKill")
-//     continue;
-//   const original: (...args: never[]) => unknown = members[name]!;
-//   members[name] = (...args: never[]): unknown => {
-//     tmux_lib.callStack.push(name);
-//     try {
-//       return original(...args);
-//     }
-//     finally {
-//       tmux_lib.callStack.pop();
-//     }
-//   };
-// }

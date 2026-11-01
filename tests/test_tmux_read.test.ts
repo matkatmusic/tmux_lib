@@ -51,9 +51,6 @@ export function session_name(): string {
   return name;
 }
 
-// export function session_name_teardown(name: string): void {
-//   tmux_lib.tmux_killSession(name);
-// }
 
 // Fixture tmux_session_panes: setup kills any stale session first.
 export function tmux_session_panes(): string {
@@ -69,9 +66,6 @@ export function tmux_session_panes(): string {
   return name;
 }
 
-// export function tmux_session_panes_teardown(name: string): void {
-//   tmux_lib.tmux_killSession(name);
-// }
 
 // Helper: returns the first pane id (e.g. "%0") in the session.
 export function _first_pane_id(session: string): string {

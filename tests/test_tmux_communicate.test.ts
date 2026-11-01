@@ -33,6 +33,3 @@ export function live_tmux_session(): string {
   return session;
 }
 
-// export function live_tmux_session_teardown(session: string): void {
-//   tmux_lib.tmux_killSession(session);
-// }

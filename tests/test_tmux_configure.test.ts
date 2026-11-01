@@ -46,9 +46,6 @@ export function tmux_session_opts(): string {
   return name;
 }
 
-// export function tmux_session_opts_teardown(name: string): void {
-//   tmux_lib.run(["tmux", "kill-session", "-t", name], { capture_output: true, check: false });
-// }
 
 // Fixture tmux_session_panes: setup kills any stale session first.
 export function tmux_session_panes(): string {
@@ -64,9 +61,6 @@ export function tmux_session_panes(): string {
   return name;
 }
 
-// export function tmux_session_panes_teardown(name: string): void {
-//   tmux_lib.tmux_killSession(name);
-// }
 
 // Helper: returns the first pane id (e.g. "%0") in the session.
 export function _first_pane_id(session: string): string {
@@ -86,6 +80,3 @@ export function layout_session(): string {
   return name;
 }
 
-// export function layout_session_teardown(name: string): void {
-//   tmux_lib.tmux_killSession(name);
-// }

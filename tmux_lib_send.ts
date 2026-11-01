@@ -50,17 +50,6 @@ export const tmux_lib_send = {
       }
     }
     return lastGlyphRest !== "";
-    // for (const line of tmux_lib_internal.splitlines(content)) {
-    //   const stripped: string = tmux_lib_internal.strip(line);
-    //   const startsWithGlyph: boolean = stripped.startsWith("❯");
-    //   if (startsWithGlyph) {
-    //     const rest: string = tmux_lib_internal.strip(stripped.slice(1));
-    //     if (rest) {
-    //       return true;
-    //     }
-    //   }
-    // }
-    // return false;
   },
 
   // Sends text, then Enter; resends Enter up to 4 times while text remains. Returns first failure code.
