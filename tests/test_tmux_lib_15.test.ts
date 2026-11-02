@@ -43,6 +43,33 @@ test("test_tmux_answerDialog_sends_Enter_for_any_Esc_to_cancel_dialog", (): void
   expect(keys).toEqual(["%4:Enter"]);
 });
 
+test("test_tmux_answerDialog_toggles_one_option_then_moves_on_in_a_multi_select_dialog", (): void => {
+  const keys: string[] = spyKeys();
+  const screen: string = "Which fruits?\n❯ 1. [ ] Apple\n  2. [ ] Banana\n     Submit\nEnter to select · Esc to cancel";
+  expect(tmux_lib.tmux_answerDialog("%5", screen)).toBe(true);
+  expect(keys).toEqual(["%5:Enter", "%5:Right"]);
+});
+
+test("test_tmux_answerDialog_only_moves_on_when_a_multi_select_option_is_already_checked", (): void => {
+  const keys: string[] = spyKeys();
+  const screen: string = "Which fruits?\n❯ 1. [✔] Apple\n  2. [ ] Banana\n     Submit\nEnter to select · Esc to cancel";
+  expect(tmux_lib.tmux_answerDialog("%5", screen)).toBe(true);
+  expect(keys).toEqual(["%5:Right"]);
+});
+
+test("test_tmux_answerDialog_presses_Enter_on_the_review_screen_that_has_no_Esc_footer", (): void => {
+  const keys: string[] = spyKeys();
+  const screen: string = "Review your answers\n\nReady to submit your answers?\n\n❯ 1. Submit answers\n  2. Cancel";
+  expect(tmux_lib.tmux_answerDialog("%5", screen)).toBe(true);
+  expect(keys).toEqual(["%5:Enter"]);
+});
+
+test("test_tmux_answerDialog_sends_nothing_for_a_checkbox_in_a_normal_reply", (): void => {
+  const keys: string[] = spyKeys();
+  expect(tmux_lib.tmux_answerDialog("%5", "- [ ] item\n❯ ")).toBe(false);
+  expect(keys).toEqual([]);
+});
+
 test("test_tmux_answerDialog_sends_nothing_for_a_normal_screen", (): void => {
   const keys: string[] = spyKeys();
   expect(tmux_lib.tmux_answerDialog("%3", "❯ hello")).toBe(false);
