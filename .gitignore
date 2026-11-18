@@ -221,3 +221,4 @@ __marimo__/
 
 .plate/
 node_modules/
+.claude_hooks/
