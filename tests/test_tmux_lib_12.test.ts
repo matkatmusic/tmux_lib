@@ -46,16 +46,22 @@ test("test_tmux_listPanes_returns_empty_list_and_logs_caller_when_target_missing
 
 test("test_tmux_listWindows_uses_default_window_index_and_name_format_when_no_extras_given", (): void => {
   const calls: string[][] = [];
-  setStubRun(0, "", "", calls);
+  setStubRun(0, "$7 mysession\n", "", calls);
   tmux_lib.tmux_listWindows("mysession");
-  expect(calls).toEqual([["tmux", "list-windows", "-t", "mysession", "-F", "#{window_index} #{window_name}"]]);
+  expect(calls).toEqual([
+    ["tmux", "list-sessions", "-F", "#{session_id} #{session_name}"],
+    ["tmux", "list-windows", "-t", "$7", "-F", "#{window_index} #{window_name}"],
+  ]);
 });
 
 test("test_tmux_listWindows_passes_extra_args_through_when_extras_given_and_omits_default_format", (): void => {
   const calls: string[][] = [];
-  setStubRun(0, "", "", calls);
+  setStubRun(0, "$7 mysession\n", "", calls);
   tmux_lib.tmux_listWindows("mysession", "-F", "#{window_name}");
-  expect(calls).toEqual([["tmux", "list-windows", "-t", "mysession", "-F", "#{window_name}"]]);
+  expect(calls).toEqual([
+    ["tmux", "list-sessions", "-F", "#{session_id} #{session_name}"],
+    ["tmux", "list-windows", "-t", "$7", "-F", "#{window_name}"],
+  ]);
 });
 
 test("test_tmux_listWindows_returns_one_string_per_window_line", (): void => {

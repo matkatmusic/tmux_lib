@@ -1,6 +1,7 @@
-import { expect, test } from "bun:test";
-import { tmux_lib_internal } from "./tmux_lib_internal.ts";
-import { installTestHooks } from "./tests/test_tmux_lib_helpers_c.ts";
+import { describe, expect, test } from "bun:test";
+import { tmux_lib_internal, type RunResult } from "./tmux_lib_internal.ts";
+import { LIVE_TIMEOUT_MS, executeRealTmux, generateUniqueSuffix, test as liveTest } from "./tests/test_tmux_lib_helpers_a.ts";
+import { addTeardown, installTestHooks } from "./tests/test_tmux_lib_helpers_c.ts";
 import { setInternalRunStub, setInternalRunThrow } from "./tests/test_tmux_lib_internal_helpers.ts";
 
 installTestHooks();
@@ -25,15 +26,42 @@ test("_tmux_run_reports_a_missing_tmux", (): void => {
 });
 
 test("_tmux_session_exists_is_true_only_for_exit_code_zero", (): void => {
-  setInternalRunStub(0);
+  setInternalRunStub(0, "other\ns\n");
   expect(tmux_lib_internal._tmux_session_exists("s")).toBe(true);
-  setInternalRunStub(1);
+  setInternalRunStub(0, "other\n");
+  expect(tmux_lib_internal._tmux_session_exists("s")).toBe(false);
+  setInternalRunStub(1, "s\n");
   expect(tmux_lib_internal._tmux_session_exists("s")).toBe(false);
 });
 
 test("_tmux_session_exists_is_false_when_tmux_is_missing", (): void => {
   setInternalRunThrow(new tmux_lib_internal.FileNotFoundError("gone"));
   expect(tmux_lib_internal._tmux_session_exists("s")).toBe(false);
+});
+
+// Starts a detached real session and returns its id; teardown kills it by id, never by name.
+function startRealSessionAndGetId(session_name: string): string {
+  const result: RunResult = executeRealTmux("new-session", "-d", "-P", "-F", "#{session_id}", "-s", session_name);
+  expect(result.returncode).toBe(0);
+  const sessionId: string = result.stdout.trim();
+  addTeardown((): void => {
+    executeRealTmux("kill-session", "-t", sessionId);
+  });
+  return sessionId;
+}
+
+describe("live", (): void => {
+  liveTest("_tmux_session_exists is true for a name with a dot", (): void => {
+    const dotName: string = `tl.exists ${generateUniqueSuffix()}`;
+    startRealSessionAndGetId(dotName);
+    expect(tmux_lib_internal._tmux_session_exists(dotName)).toBe(true);
+  }, LIVE_TIMEOUT_MS);
+
+  liveTest("_tmux_session_exists is false when only a longer name exists", (): void => {
+    const shortName: string = `tl-exists-${generateUniqueSuffix()}`;
+    startRealSessionAndGetId(`${shortName}-longer`);
+    expect(tmux_lib_internal._tmux_session_exists(shortName)).toBe(false);
+  }, LIVE_TIMEOUT_MS);
 });
 
 test("_tmux_default_send_sends_keys_to_the_pane", (): void => {

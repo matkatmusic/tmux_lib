@@ -1218,10 +1218,11 @@ def test_tmux_newWindow_invokes_tmux_new_window_with_dash_t_session_and_dash_n_w
     # Scenario: caller passes session and window names; subprocess receives `tmux new-window -t S -n W`.
     calls: list = []
     monkeypatch.setattr(subprocess, "run", _make_fake_run(0, calls=calls))
+    monkeypatch.setattr(mod, "tmux_findSessionIdByName", lambda name: "$7")
     # Test action.
     tmux_newWindow("mysess", "mywin")
-    # Test verification: exact argv ordering.
-    assert calls == [["tmux", "new-window", "-t", "mysess", "-n", "mywin"]]
+    # Test verification: exact argv ordering, session targeted by id.
+    assert calls == [["tmux", "new-window", "-t", "$7:", "-n", "mywin"]]
 
 
 def test_tmux_newWindow_returns_zero_on_success(monkeypatch):
@@ -1252,10 +1253,11 @@ def test_tmux_newWindow_passes_extra_args_through_after_window_name(monkeypatch)
     # Scenario: extra args (e.g. -c cwd, shell command) appear after `-n <window>`.
     calls: list = []
     monkeypatch.setattr(subprocess, "run", _make_fake_run(0, calls=calls))
+    monkeypatch.setattr(mod, "tmux_findSessionIdByName", lambda name: "$7")
     # Test action.
     tmux_newWindow("s", "w", "-c", "/tmp", "echo hi")
     # Test verification: extras follow `-n w` in order.
-    assert calls == [["tmux", "new-window", "-t", "s", "-n", "w", "-c", "/tmp", "echo hi"]]
+    assert calls == [["tmux", "new-window", "-t", "$7:", "-n", "w", "-c", "/tmp", "echo hi"]]
 
 
 def test_tmux_splitWindow_invokes_tmux_split_window_with_dash_h_for_horizontal(monkeypatch):
@@ -1589,10 +1591,11 @@ def test_tmux_killSession_invokes_tmux_kill_session_with_dash_t_target(monkeypat
     # Scenario: caller passes a session name; function shells out to `tmux kill-session -t <name>`.
     calls: list = []
     monkeypatch.setattr(subprocess, "run", _make_fake_run(0, calls=calls))
+    monkeypatch.setattr(mod, "tmux_findSessionIdByName", lambda name: "$7")
     # Test action: invoke with a session name.
     tmux_killSession("my-sess")
-    # Test verification: argv exactly matches.
-    assert calls == [["tmux", "kill-session", "-t", "my-sess"]]
+    # Test verification: argv exactly matches, session targeted by id.
+    assert calls == [["tmux", "kill-session", "-t", "$7"]]
 
 
 def test_tmux_killSession_returns_zero_on_success(monkeypatch):
@@ -1616,7 +1619,7 @@ def test_tmux_killSession_returns_nonzero_and_logs_caller_when_kill_fails(monkey
     # Test verification: rc propagated and stderr names caller + cmd + tmux text.
     assert rc == 1
     assert "caller_frame" in err
-    assert "tmux kill-session -t ghost" in err
+    assert "tmux kill-session -t =ghost" in err
     assert "can't find session: ghost" in err
 
 
@@ -1877,6 +1880,7 @@ def test_tmux_hasSession_returns_zero_when_session_exists(monkeypatch):
     # Scenario: tmux reports session present (rc=0); function returns 0.
     # Setup: monkeypatch subprocess.run to return rc=0.
     monkeypatch.setattr(subprocess, "run", _make_fake_run(0))
+    monkeypatch.setattr(mod, "tmux_findSessionIdByName", lambda name: "$7")
     # Test action: probe for any session name.
     rc = tmux_hasSession("mysess")
     # Test verification: rc passes through unchanged.
@@ -1897,10 +1901,11 @@ def test_tmux_hasSession_invokes_tmux_has_session_with_dash_t_target(monkeypatch
     calls: list = []
     # Setup: capturing fake.
     monkeypatch.setattr(subprocess, "run", _make_fake_run(0, calls=calls))
+    monkeypatch.setattr(mod, "tmux_findSessionIdByName", lambda name: "$7")
     # Test action: invoke.
     tmux_hasSession("alpha")
-    # Test verification: argv exactly matches `tmux has-session -t alpha`.
-    assert calls == [["tmux", "has-session", "-t", "alpha"]]
+    # Test verification: argv exactly matches `tmux has-session -t $7`.
+    assert calls == [["tmux", "has-session", "-t", "$7"]]
 
 
 def test_tmux_hasSession_does_not_log_to_stderr_when_session_is_simply_absent(monkeypatch, capsys):
@@ -1916,13 +1921,14 @@ def test_tmux_hasSession_does_not_log_to_stderr_when_session_is_simply_absent(mo
 def test_tmux_hasSession_logs_caller_name_to_stderr_on_unexpected_nonzero_rc(monkeypatch, capsys):
     # Scenario: rc not in {0,1} (e.g. 2) is unexpected; log caller-attributed line to stderr.
     monkeypatch.setattr(subprocess, "run", _make_fake_run(2, stderr="boom"))
+    monkeypatch.setattr(mod, "tmux_findSessionIdByName", lambda name: "$7")
     # Test action: invoke directly so caller-frame name = this test's name.
     rc = tmux_hasSession("weird")
     # Test verification: rc returned as-is, stderr has caller name + cmd + tmux's stderr text.
     captured = capsys.readouterr()
     assert rc == 2
     assert "test_tmux_hasSession_logs_caller_name_to_stderr_on_unexpected_nonzero_rc" in captured.err
-    assert "tmux has-session -t weird" in captured.err
+    assert "tmux has-session -t $7" in captured.err
     assert "boom" in captured.err
 
 
@@ -1930,10 +1936,11 @@ def test_tmux_listClients_invokes_tmux_list_clients_with_dash_t_session_name(mon
     # Scenario: function shells out to `tmux list-clients -t <session_name>` (proves argv shape).
     calls: list = []
     monkeypatch.setattr(subprocess, "run", _make_fake_run(0, calls=calls))
+    monkeypatch.setattr(mod, "tmux_findSessionIdByName", lambda name: "$7")
     # Test action: invoke.
     tmux_listClients("mysess")
-    # Test verification: exact argv.
-    assert calls == [["tmux", "list-clients", "-t", "mysess"]]
+    # Test verification: exact argv, session targeted by id.
+    assert calls == [["tmux", "list-clients", "-t", "$7"]]
 
 
 def test_tmux_listClients_returns_empty_list_when_no_clients_attached(monkeypatch):
@@ -1971,7 +1978,7 @@ def test_tmux_listClients_returns_empty_list_and_logs_caller_when_session_not_fo
     # Test verification: empty list, stderr has caller + cmd.
     assert result == []
     assert "caller_frame" in err
-    assert "tmux list-clients -t ghost" in err
+    assert "tmux list-clients -t =ghost" in err
 
 
 def test_tmux_capturePane_invokes_tmux_capture_pane_with_dash_p_dash_t_target_when_no_scrollback_requested(monkeypatch):
@@ -2070,20 +2077,22 @@ def test_tmux_listWindows_uses_default_window_index_and_name_format_when_no_extr
     # Scenario: caller provides only session_name; default `-F '#{window_index} #{window_name}'` is injected.
     calls: list = []
     monkeypatch.setattr(subprocess, "run", _make_fake_run(0, stdout="", calls=calls))
+    monkeypatch.setattr(mod, "tmux_findSessionIdByName", lambda name: "$7")
     # Test action.
     tmux_listWindows("mysession")
-    # Test verification: argv has default -F format.
-    assert calls == [["tmux", "list-windows", "-t", "mysession", "-F", "#{window_index} #{window_name}"]]
+    # Test verification: argv has default -F format, session targeted by id.
+    assert calls == [["tmux", "list-windows", "-t", "$7", "-F", "#{window_index} #{window_name}"]]
 
 
 def test_tmux_listWindows_passes_extra_args_through_when_extras_given_and_omits_default_format(monkeypatch):
     # Scenario: extras provided; default -F NOT appended (caller controls format).
     calls: list = []
     monkeypatch.setattr(subprocess, "run", _make_fake_run(0, stdout="", calls=calls))
+    monkeypatch.setattr(mod, "tmux_findSessionIdByName", lambda name: "$7")
     # Test action.
     tmux_listWindows("mysession", "-F", "#{window_name}")
     # Test verification: extras passed verbatim.
-    assert calls == [["tmux", "list-windows", "-t", "mysession", "-F", "#{window_name}"]]
+    assert calls == [["tmux", "list-windows", "-t", "$7", "-F", "#{window_name}"]]
 
 
 def test_tmux_listWindows_returns_one_string_per_window_line(monkeypatch):
@@ -2274,4 +2283,65 @@ def test_listPanes_afterKillPane_hasOnePane(tmux_session_panes):
     # Test action: list panes.
     rows = tmux_listPanes(tmux_session_panes)
     # Test verification: down to one pane.
+    assert len(rows) == 1
+
+
+@pytest.fixture
+def exact_name_sessions():
+    # Provide a factory that starts a detached session and returns its id; teardown kills each by id, never by name.
+    session_ids: list[str] = []
+
+    def _start(session_name: str) -> str:
+        result = subprocess.run(
+            ["tmux", "new-session", "-d", "-s", session_name, "-P", "-F", "#{session_id}"],
+            capture_output=True, text=True, check=True,
+        )
+        session_id = result.stdout.strip()
+        session_ids.append(session_id)
+        return session_id
+
+    yield _start
+    for session_id in session_ids:
+        subprocess.run(["tmux", "kill-session", "-t", session_id], capture_output=True, check=False)
+
+
+@pytest.mark.live
+def test_hasSession_returnsOne_whenOnlyLongerNameExists(exact_name_sessions):
+    # Scenario: has-session must not prefix-match a longer session name.
+    # Setup: only "<base>-longer" exists.
+    base = f"exact-pfx-{os.getpid()}-{time.time_ns()}"
+    exact_name_sessions(base + "-longer")
+    # Test action + verification: the shorter name is absent.
+    assert tmux_hasSession(base) == 1
+
+
+@pytest.mark.live
+def test_hasSession_returnsZero_forDottedName(exact_name_sessions):
+    # Scenario: a dot in the session name must not be read as a pane separator.
+    base = f"exact.dot-{os.getpid()}-{time.time_ns()}"
+    exact_name_sessions(base)
+    assert tmux_hasSession(base) == 0
+
+
+@pytest.mark.live
+def test_killSession_closesDottedNameSession(exact_name_sessions):
+    # Scenario: kill-session must close a session whose name has a dot.
+    base = f"exact.kill-{os.getpid()}-{time.time_ns()}"
+    session_id = exact_name_sessions(base)
+    # Test action.
+    rc = tmux_killSession(base)
+    # Test verification: the call succeeded and the session id is gone.
+    assert rc == 0
+    still_alive = subprocess.run(["tmux", "has-session", "-t", session_id], capture_output=True, check=False)
+    assert still_alive.returncode != 0
+
+
+@pytest.mark.live
+def test_listWindows_worksForDottedNameSession(exact_name_sessions):
+    # Scenario: list-windows must list the windows of a session whose name has a dot.
+    base = f"exact.win-{os.getpid()}-{time.time_ns()}"
+    exact_name_sessions(base)
+    # Test action.
+    rows = tmux_listWindows(base)
+    # Test verification: the single default window is listed.
     assert len(rows) == 1

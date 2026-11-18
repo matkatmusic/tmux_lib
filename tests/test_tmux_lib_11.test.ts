@@ -1,12 +1,13 @@
-import { expect } from "bun:test";
+import { expect, spyOn } from "bun:test";
 import { tmux_lib } from "../tmux_lib.ts";
-import { setStubRun, test } from "./test_tmux_lib_helpers_a.ts";
+import type { RunResult } from "../tmux_lib_internal.ts";
+import { setStubRun, test, wrapFakeRun } from "./test_tmux_lib_helpers_a.ts";
 import { getCaptureStreams, installTestHooks } from "./test_tmux_lib_helpers_c.ts";
 
 installTestHooks();
 
 test("test_tmux_hasSession_returns_zero_when_session_exists", (): void => {
-  setStubRun(0);
+  setStubRun(0, "$7 mysess\n");
   const rc: number = tmux_lib.tmux_hasSession("mysess");
   expect(rc).toBe(0);
 });
@@ -19,9 +20,12 @@ test("test_tmux_hasSession_returns_one_when_session_does_not_exist", (): void =>
 
 test("test_tmux_hasSession_invokes_tmux_has_session_with_dash_t_target", (): void => {
   const calls: string[][] = [];
-  setStubRun(0, "", "", calls);
+  setStubRun(0, "$7 alpha\n", "", calls);
   tmux_lib.tmux_hasSession("alpha");
-  expect(calls).toEqual([["tmux", "has-session", "-t", "alpha"]]);
+  expect(calls).toEqual([
+    ["tmux", "list-sessions", "-F", "#{session_id} #{session_name}"],
+    ["tmux", "has-session", "-t", "$7"],
+  ]);
 });
 
 test("test_tmux_hasSession_does_not_log_to_stderr_when_session_is_simply_absent", (): void => {
@@ -32,7 +36,12 @@ test("test_tmux_hasSession_does_not_log_to_stderr_when_session_is_simply_absent"
 });
 
 test("test_tmux_hasSession_logs_caller_name_to_stderr_on_unexpected_nonzero_rc", (): void => {
-  setStubRun(2, "", "boom");
+  spyOn(tmux_lib, "run").mockImplementation(wrapFakeRun((argv: string[]): RunResult => {
+    if (argv[1] === "list-sessions") {
+      return { returncode: 0, stdout: "$7 weird\n", stderr: "" };
+    }
+    return { returncode: 2, stdout: "", stderr: "boom" };
+  }));
   const streams: { out: () => string; err: () => string } = getCaptureStreams();
   let rc: number | undefined;
   function test_tmux_hasSession_logs_caller_name_to_stderr_on_unexpected_nonzero_rc(): void {
@@ -42,15 +51,18 @@ test("test_tmux_hasSession_logs_caller_name_to_stderr_on_unexpected_nonzero_rc",
   const captured_err: string = streams.err();
   expect(rc).toBe(2);
   expect(captured_err).toContain("test_tmux_hasSession_logs_caller_name_to_stderr_on_unexpected_nonzero_rc");
-  expect(captured_err).toContain("tmux has-session -t weird");
+  expect(captured_err).toContain("tmux has-session -t $7");
   expect(captured_err).toContain("boom");
 });
 
 test("test_tmux_listClients_invokes_tmux_list_clients_with_dash_t_session_name", (): void => {
   const calls: string[][] = [];
-  setStubRun(0, "", "", calls);
+  setStubRun(0, "$7 mysess\n", "", calls);
   tmux_lib.tmux_listClients("mysess");
-  expect(calls).toEqual([["tmux", "list-clients", "-t", "mysess"]]);
+  expect(calls).toEqual([
+    ["tmux", "list-sessions", "-F", "#{session_id} #{session_name}"],
+    ["tmux", "list-clients", "-t", "$7"],
+  ]);
 });
 
 test("test_tmux_listClients_returns_empty_list_when_no_clients_attached", (): void => {
@@ -79,7 +91,7 @@ test("test_tmux_listClients_returns_empty_list_and_logs_caller_when_session_not_
   const err: string = streams.err();
   expect(result).toEqual([]);
   expect(err).toContain("caller_frame");
-  expect(err).toContain("tmux list-clients -t ghost");
+  expect(err).toContain("tmux list-clients -t =ghost");
 });
 
 test("test_tmux_capturePane_invokes_tmux_capture_pane_with_dash_p_dash_t_target_when_no_scrollback_requested", (): void => {

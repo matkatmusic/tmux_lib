@@ -8,9 +8,12 @@ installTestHooks();
 
 test("test_tmux_killSession_invokes_tmux_kill_session_with_dash_t_target", (): void => {
   const calls: string[][] = [];
-  setStubRun(0, "", "", calls);
+  setStubRun(0, "$7 my-sess\n", "", calls);
   tmux_lib.tmux_killSession("my-sess");
-  expect(calls).toEqual([["tmux", "kill-session", "-t", "my-sess"]]);
+  expect(calls).toEqual([
+    ["tmux", "list-sessions", "-F", "#{session_id} #{session_name}"],
+    ["tmux", "kill-session", "-t", "$7"],
+  ]);
 });
 
 test("test_tmux_killSession_returns_zero_on_success", (): void => {
@@ -29,7 +32,7 @@ test("test_tmux_killSession_returns_nonzero_and_logs_caller_when_kill_fails", ()
   const err: string = streams.err();
   expect(rc).toBe(1);
   expect(err).toContain("caller_frame");
-  expect(err).toContain("tmux kill-session -t ghost");
+  expect(err).toContain("tmux kill-session -t =ghost");
   expect(err).toContain("can't find session: ghost");
 });
 

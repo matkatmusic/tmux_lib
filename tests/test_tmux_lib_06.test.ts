@@ -83,9 +83,12 @@ test("test_tmux_newPane_prints_stdout_to_caller_on_success", (): void => {
 
 test("test_tmux_newWindow_invokes_tmux_new_window_with_dash_t_session_and_dash_n_window", (): void => {
   const calls: string[][] = [];
-  setStubRun(0, "", "", calls);
+  setStubRun(0, "$7 mysess\n", "", calls);
   tmux_lib.tmux_newWindow("mysess", "mywin");
-  expect(calls).toEqual([["tmux", "new-window", "-t", "mysess", "-n", "mywin"]]);
+  expect(calls).toEqual([
+    ["tmux", "list-sessions", "-F", "#{session_id} #{session_name}"],
+    ["tmux", "new-window", "-t", "$7:", "-n", "mywin"],
+  ]);
 });
 
 test("test_tmux_newWindow_returns_zero_on_success", (): void => {
@@ -109,7 +112,10 @@ test("test_tmux_newWindow_returns_nonzero_and_logs_caller_when_creation_fails", 
 
 test("test_tmux_newWindow_passes_extra_args_through_after_window_name", (): void => {
   const calls: string[][] = [];
-  setStubRun(0, "", "", calls);
+  setStubRun(0, "$7 s\n", "", calls);
   tmux_lib.tmux_newWindow("s", "w", "-c", "/tmp", "echo hi");
-  expect(calls).toEqual([["tmux", "new-window", "-t", "s", "-n", "w", "-c", "/tmp", "echo hi"]]);
+  expect(calls).toEqual([
+    ["tmux", "list-sessions", "-F", "#{session_id} #{session_name}"],
+    ["tmux", "new-window", "-t", "$7:", "-n", "w", "-c", "/tmp", "echo hi"],
+  ]);
 });
