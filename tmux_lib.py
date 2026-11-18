@@ -69,9 +69,24 @@ def tmux_setOptionForWindow(window_target: str, name: str, value: str) -> int:
     return tmux_setOption("-w", "-t", window_target, name, value)
 
 
+# Returns the tmux session id (e.g. "$3") whose name equals `session_name` exactly, or None; tmux `-t <name>` prefix-matches and reads dots as separators, an id does neither.
+def tmux_findSessionIdByName(session_name: str) -> str | None:
+    cmd = ["tmux", "list-sessions", "-F", "#{session_id} #{session_name}"]
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    for line in (result.stdout or "").split("\n"):
+        session_id, _, name = line.partition(" ")
+        if name == session_name:
+            return session_id
+    return None
+
+
 # Probes whether a tmux session with the given name exists; rc=0 (exists) or 1 (absent) are both valid answers and never log; only unexpected rc values log to stderr.
 def tmux_hasSession(session_name: str) -> int:
-    cmd = ["tmux", "has-session", "-t", session_name]
+    session_id = tmux_findSessionIdByName(session_name)
+    if session_id is None:
+        return 1
+    # cmd = ["tmux", "has-session", "-t", session_name]
+    cmd = ["tmux", "has-session", "-t", session_id]
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if result.returncode not in (0, 1):
         caller = sys._getframe(1).f_code.co_name
@@ -95,7 +110,12 @@ def tmux_newSession(session_name: str, *extra_args: str) -> int:
 
 # Kills the tmux session named `session_name` via `tmux kill-session -t <name>`.
 def tmux_killSession(session_name: str) -> int:
-    cmd = ["tmux", "kill-session", "-t", session_name]
+    session_id = tmux_findSessionIdByName(session_name)
+    # Missing session: "=name" is exact-match only, so tmux fails with its own error instead of killing a prefix match.
+    if session_id is None:
+        session_id = f"={session_name}"
+    # cmd = ["tmux", "kill-session", "-t", session_name]
+    cmd = ["tmux", "kill-session", "-t", session_id]
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         caller = sys._getframe(1).f_code.co_name
@@ -107,7 +127,11 @@ def tmux_killSession(session_name: str) -> int:
 
 # Lists tmux clients attached to a session; returns list[str] (one per client) for idiomatic data flow, [] on failure with caller-attributed stderr log.
 def tmux_listClients(session_name: str) -> list[str]:
-    cmd = ["tmux", "list-clients", "-t", session_name]
+    session_id = tmux_findSessionIdByName(session_name)
+    if session_id is None:
+        session_id = f"={session_name}"
+    # cmd = ["tmux", "list-clients", "-t", session_name]
+    cmd = ["tmux", "list-clients", "-t", session_id]
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         caller = sys._getframe(1).f_code.co_name
@@ -203,7 +227,11 @@ def tmux_setPaneTitle(pane_target: str, title: str) -> int:
 
 # Creates a new tmux window in <session_name> named <window_name>; extra args pass through after `-t <s> -n <w>`.
 def tmux_newWindow(session_name: str, window_name: str, *extra_args: str) -> int:
-    cmd = ["tmux", "new-window", "-t", session_name, "-n", window_name, *extra_args]
+    session_id = tmux_findSessionIdByName(session_name)
+    if session_id is None:
+        session_id = f"={session_name}"
+    # cmd = ["tmux", "new-window", "-t", session_name, "-n", window_name, *extra_args]
+    cmd = ["tmux", "new-window", "-t", f"{session_id}:", "-n", window_name, *extra_args]
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         caller = sys._getframe(1).f_code.co_name
@@ -229,10 +257,15 @@ def tmux_killWindow(window_target: str) -> int:
 
 # Lists windows for a tmux session; with no extras returns "<window_index> <window_name>" per window (default -F preserved); with extras passes them through verbatim and omits the default.
 def tmux_listWindows(session_name: str, *extra_args: str) -> list[str]:
+    session_id = tmux_findSessionIdByName(session_name)
+    if session_id is None:
+        session_id = f"={session_name}"
     if not extra_args:
-        cmd = ["tmux", "list-windows", "-t", session_name, "-F", "#{window_index} #{window_name}"]
+        # cmd = ["tmux", "list-windows", "-t", session_name, "-F", "#{window_index} #{window_name}"]
+        cmd = ["tmux", "list-windows", "-t", session_id, "-F", "#{window_index} #{window_name}"]
     else:
-        cmd = ["tmux", "list-windows", "-t", session_name, *extra_args]
+        # cmd = ["tmux", "list-windows", "-t", session_name, *extra_args]
+        cmd = ["tmux", "list-windows", "-t", session_id, *extra_args]
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         caller = sys._getframe(1).f_code.co_name

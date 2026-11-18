@@ -67,8 +67,18 @@ export const tmux_lib_internal = {
 
   _tmux_session_exists(session: string): boolean {
     try {
-      const result: BytesRunResult = tmux_lib_internal.run(["tmux", "has-session", "-t", session], { capture_output: true });
-      return result.returncode === 0;
+      // const result: BytesRunResult = tmux_lib_internal.run(["tmux", "has-session", "-t", session], { capture_output: true });
+      // return result.returncode === 0;
+      const result: RunResult = tmux_lib_internal.run(["tmux", "list-sessions", "-F", "#{session_name}"], { capture_output: true, text: true, check: false });
+      if (result.returncode !== 0) {
+        return false;
+      }
+      for (const line of (result.stdout || "").split("\n")) {
+        if (line === session) {
+          return true;
+        }
+      }
+      return false;
     }
     catch (e: unknown) {
       if (e instanceof FileNotFoundError)

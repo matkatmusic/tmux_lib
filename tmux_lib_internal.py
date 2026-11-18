@@ -37,11 +37,21 @@ def _tmux_run(*args: str) -> str:
 
 def _tmux_session_exists(session: str) -> bool:
     try:
+        # result = subprocess.run(
+        #     ["tmux", "has-session", "-t", session],
+        #     capture_output=True,
+        # )
+        # return result.returncode == 0
+        # Exact name match via list-sessions: `-t <name>` prefix-matches and reads dots as separators.
         result = subprocess.run(
-            ["tmux", "has-session", "-t", session],
+            ["tmux", "list-sessions", "-F", "#{session_name}"],
             capture_output=True,
+            text=True,
         )
-        return result.returncode == 0
+        for line in result.stdout.split("\n"):
+            if line == session:
+                return True
+        return False
     except FileNotFoundError:
         return False
 

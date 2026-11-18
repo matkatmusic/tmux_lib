@@ -2,9 +2,32 @@ import { tmux_lib } from "./tmux_lib.ts";
 import { type RunResult } from "./tmux_lib_internal.ts";
 
 export const tmux_lib_session = {
+  // Returns the id (e.g. "$3") of the session whose name equals `session_name` exactly, or undefined. Needed because `-t <name>` prefix-matches and reads a dot as a separator.
+  tmux_findSessionIdByName(session_name: string): string | undefined {
+    const cmd: string[] = ["tmux", "list-sessions", "-F", "#{session_id} #{session_name}"];
+    const result: RunResult = tmux_lib.run(cmd, { capture_output: true, text: true, check: false });
+    if (result.returncode !== 0) {
+      return undefined;
+    }
+    for (const line of (result.stdout || "").split("\n")) {
+      const firstSpace: number = line.indexOf(" ");
+      if (firstSpace !== -1) {
+        if (line.slice(firstSpace + 1) === session_name) {
+          return line.slice(0, firstSpace);
+        }
+      }
+    }
+    return undefined;
+  },
+
   // Checks if a tmux session exists. Returns 0 or 1 silently; other codes log to stderr.
   tmux_hasSession(session_name: string): number {
-    const cmd: string[] = ["tmux", "has-session", "-t", session_name];
+    const sessionId: string | undefined = tmux_lib.tmux_findSessionIdByName(session_name);
+    if (sessionId === undefined) {
+      return 1;
+    }
+    // const cmd: string[] = ["tmux", "has-session", "-t", session_name];
+    const cmd: string[] = ["tmux", "has-session", "-t", sessionId];
     const result: RunResult = tmux_lib.run(cmd, { capture_output: true, text: true, check: false });
     const notZero: boolean = result.returncode !== 0;
     const notOne: boolean = result.returncode !== 1;
@@ -31,7 +54,11 @@ export const tmux_lib_session = {
 
   // Kills the tmux session named `session_name` via `tmux kill-session -t <name>`.
   tmux_killSession(session_name: string): number {
-    const cmd: string[] = ["tmux", "kill-session", "-t", session_name];
+    const sessionId: string | undefined = tmux_lib.tmux_findSessionIdByName(session_name);
+    // Missing session: "=name" is an exact match, so tmux reports its own error and never kills a longer-named session.
+    const target: string = sessionId === undefined ? `=${session_name}` : sessionId;
+    // const cmd: string[] = ["tmux", "kill-session", "-t", session_name];
+    const cmd: string[] = ["tmux", "kill-session", "-t", target];
     const result: RunResult = tmux_lib.run(cmd, { capture_output: true, text: true, check: false });
     if (result.returncode !== 0) {
       const caller: string = tmux_lib.callerName();
@@ -43,7 +70,10 @@ export const tmux_lib_session = {
 
   // Lists clients attached to a session, one per line; [] on failure, with a caller-named stderr log.
   tmux_listClients(session_name: string): string[] {
-    const cmd: string[] = ["tmux", "list-clients", "-t", session_name];
+    const sessionId: string | undefined = tmux_lib.tmux_findSessionIdByName(session_name);
+    const target: string = sessionId === undefined ? `=${session_name}` : sessionId;
+    // const cmd: string[] = ["tmux", "list-clients", "-t", session_name];
+    const cmd: string[] = ["tmux", "list-clients", "-t", target];
     const result: RunResult = tmux_lib.run(cmd, { capture_output: true, text: true, check: false });
     if (result.returncode !== 0) {
       const caller: string = tmux_lib.callerName();

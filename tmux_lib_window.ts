@@ -4,7 +4,11 @@ import { type RunResult } from "./tmux_lib_internal.ts";
 export const tmux_lib_window = {
   // Creates a tmux window <window_name> in <session_name>; extra args pass through after `-t <s> -n <w>`.
   tmux_newWindow(session_name: string, window_name: string, ...extra_args: string[]): number {
-    const cmd: string[] = ["tmux", "new-window", "-t", session_name, "-n", window_name, ...extra_args];
+    const sessionId: string | undefined = tmux_lib.tmux_findSessionIdByName(session_name);
+    // Missing session: "=name:" is an exact match, so tmux reports its own error.
+    const target: string = sessionId === undefined ? `=${session_name}:` : `${sessionId}:`;
+    // const cmd: string[] = ["tmux", "new-window", "-t", session_name, "-n", window_name, ...extra_args];
+    const cmd: string[] = ["tmux", "new-window", "-t", target, "-n", window_name, ...extra_args];
     const result: RunResult = tmux_lib.run(cmd, { capture_output: true, text: true, check: false });
     if (result.returncode !== 0) {
       const caller: string = tmux_lib.callerName();
@@ -31,12 +35,16 @@ export const tmux_lib_window = {
 
   // Lists a session's windows as "<index> <name>"; extra arguments replace that default format.
   tmux_listWindows(session_name: string, ...extra_args: string[]): string[] {
+    const sessionId: string | undefined = tmux_lib.tmux_findSessionIdByName(session_name);
+    const target: string = sessionId === undefined ? `=${session_name}` : sessionId;
     let cmd: string[];
     if (extra_args.length === 0) {
-      cmd = ["tmux", "list-windows", "-t", session_name, "-F", "#{window_index} #{window_name}"];
+      // cmd = ["tmux", "list-windows", "-t", session_name, "-F", "#{window_index} #{window_name}"];
+      cmd = ["tmux", "list-windows", "-t", target, "-F", "#{window_index} #{window_name}"];
     }
     else {
-      cmd = ["tmux", "list-windows", "-t", session_name, ...extra_args];
+      // cmd = ["tmux", "list-windows", "-t", session_name, ...extra_args];
+      cmd = ["tmux", "list-windows", "-t", target, ...extra_args];
     }
     const result: RunResult = tmux_lib.run(cmd, { capture_output: true, text: true, check: false });
     if (result.returncode !== 0) {
